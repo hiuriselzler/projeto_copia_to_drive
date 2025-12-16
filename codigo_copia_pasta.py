@@ -1,14 +1,21 @@
-﻿import time
+﻿"""
+Sync Drive - Sincronizador de Pastas com Google Drive
+Autor: Seu Nome
+Descrição: Monitora uma pasta local e sincroniza automaticamente com Google Drive
+"""
+
+import time
 import os
 import shutil
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from datetime import datetime
 
+# Configurações - o usuário deve ajustar estas variáveis
 PASTA_MONITORADA = r"C:\Arquivo Empresas\Upload Drive"
 PASTA_GOOGLE_DRIVE = r"I:\Meu Drive\Upload Drive"
 
-class MonitorPasta(FileSystemEventHandler):
+class SyncDriveHandler(FileSystemEventHandler):
     def __init__(self):
         self.arquivos_processados = set()
         super().__init__()
@@ -40,15 +47,13 @@ class MonitorPasta(FileSystemEventHandler):
     def copiar_estrutura_pastas(self, caminho_pasta):
         """Copia a estrutura de pastas para o destino"""
         try:
-            # Calcula o caminho relativo
             caminho_relativo = os.path.relpath(caminho_pasta, PASTA_MONITORADA)
             destino_pasta = os.path.join(PASTA_GOOGLE_DRIVE, caminho_relativo)
             
-            # Cria a pasta no destino
             os.makedirs(destino_pasta, exist_ok=True)
             print(f"📂 Estrutura de pasta criada: {caminho_relativo}")
             
-            # Agora copia todos os arquivos desta pasta
+            # Copia todos os arquivos desta pasta
             for item in os.listdir(caminho_pasta):
                 caminho_item = os.path.join(caminho_pasta, item)
                 if os.path.isfile(caminho_item):
@@ -60,72 +65,55 @@ class MonitorPasta(FileSystemEventHandler):
     def processar_arquivo(self, caminho_arquivo):
         """Processa e copia um arquivo individual"""
         try:
-            # Verifica se é um arquivo válido
             if not os.path.isfile(caminho_arquivo):
                 return
                 
             nome_arquivo = os.path.basename(caminho_arquivo)
             
-            # Ignora arquivos temporários e ocultos
+            # Ignora arquivos temporários
             if (nome_arquivo.startswith('~') or 
                 nome_arquivo.startswith('.') or 
                 nome_arquivo.startswith('__')):
                 return
             
-            # Verifica se já processamos este arquivo recentemente
             if caminho_arquivo in self.arquivos_processados:
                 return
             
-            # Aguarda para garantir que o arquivo está completamente escrito
-            print(f"⏳ Aguardando estabilização do arquivo: {nome_arquivo}")
+            print(f"⏳ Processando: {nome_arquivo}")
             if not self.aguardar_arquivo_pronto(caminho_arquivo):
-                print(f"❌ Arquivo não estabilizou: {nome_arquivo}")
+                print(f"❌ Arquivo não está pronto: {nome_arquivo}")
                 return
             
-            # Calcula o caminho relativo para manter a estrutura de pastas
             caminho_relativo = os.path.relpath(caminho_arquivo, PASTA_MONITORADA)
             destino_completo = os.path.join(PASTA_GOOGLE_DRIVE, caminho_relativo)
             
-            # Cria a pasta de destino se não existir
             pasta_destino = os.path.dirname(destino_completo)
             os.makedirs(pasta_destino, exist_ok=True)
             
-            # Verifica se precisa copiar (comparando datas de modificação)
             if self.precisa_copiar(caminho_arquivo, destino_completo):
                 print(f"🔄 Copiando: {caminho_relativo}")
-                print(f"   De: {caminho_arquivo}")
-                print(f"   Para: {destino_completo}")
-                
                 shutil.copy2(caminho_arquivo, destino_completo)
                 self.arquivos_processados.add(caminho_arquivo)
-                
-                print(f"✅ COPIADO COM SUCESSO: {caminho_relativo}")
-                print(f"   Horário: {datetime.now().strftime('%H:%M:%S')}")
+                print(f"✅ COPIADO: {caminho_relativo} - {datetime.now().strftime('%H:%M:%S')}")
             else:
-                print(f"📋 Arquivo já está atualizado: {caminho_relativo}")
+                print(f"📋 Arquivo atualizado: {caminho_relativo}")
                 self.arquivos_processados.add(caminho_arquivo)
             
         except Exception as e:
-            print(f"❌ ERRO ao processar {caminho_arquivo}: {str(e)}")
+            print(f"❌ ERRO: {caminho_arquivo} - {str(e)}")
 
     def aguardar_arquivo_pronto(self, caminho_arquivo, timeout=10):
         """Aguarda até que o arquivo esteja pronto para cópia"""
         for i in range(timeout):
             try:
-                # Tenta abrir o arquivo em modo leitura
                 with open(caminho_arquivo, 'rb'):
                     pass
-                
-                # Verifica se o tamanho se estabilizou
                 tamanho_atual = os.path.getsize(caminho_arquivo)
                 time.sleep(0.5)
                 tamanho_final = os.path.getsize(caminho_arquivo)
-                
                 if tamanho_atual == tamanho_final and tamanho_atual > 0:
                     return True
-                    
             except (IOError, OSError):
-                # Arquivo ainda está sendo escrito
                 time.sleep(1)
                 continue
         return False
@@ -134,11 +122,8 @@ class MonitorPasta(FileSystemEventHandler):
         """Verifica se o arquivo precisa ser copiado"""
         if not os.path.exists(destino):
             return True
-            
-        # Compara datas de modificação
         mod_origem = os.path.getmtime(origem)
         mod_destino = os.path.getmtime(destino)
-        
         return mod_origem > mod_destino
 
 def sincronizar_estrutura_completa():
@@ -146,75 +131,72 @@ def sincronizar_estrutura_completa():
     print("🔍 Sincronizando estrutura completa...")
     
     try:
-        # Primeiro, cria toda a estrutura de pastas
+        # Cria estrutura de pastas
         for root, dirs, files in os.walk(PASTA_MONITORADA):
             for dir_name in dirs:
                 caminho_pasta = os.path.join(root, dir_name)
                 caminho_relativo = os.path.relpath(caminho_pasta, PASTA_MONITORADA)
                 destino_pasta = os.path.join(PASTA_GOOGLE_DRIVE, caminho_relativo)
                 os.makedirs(destino_pasta, exist_ok=True)
-                print(f"📂 Criada pasta: {caminho_relativo}")
         
-        # Depois, copia todos os arquivos
-        event_handler = MonitorPasta()
+        # Copia arquivos
+        event_handler = SyncDriveHandler()
         for root, dirs, files in os.walk(PASTA_MONITORADA):
             for arquivo in files:
                 caminho_completo = os.path.join(root, arquivo)
-                print(f"📋 Sincronizando arquivo: {os.path.relpath(caminho_completo, PASTA_MONITORADA)}")
                 event_handler.processar_arquivo(caminho_completo)
                 
     except Exception as e:
         print(f"❌ Erro na sincronização inicial: {e}")
 
-# ===== INICIALIZAÇÃO =====
-print("=" * 60)
-print("🔄 SISTEMA DE SINCRONIZAÇÃO COM GOOGLE DRIVE - ESTRUTURA COMPLETA")
-print("=" * 60)
+def main():
+    """Função principal"""
+    print("=" * 60)
+    print("🔄 SISTEMA DE SINCRONIZAÇÃO COM GOOGLE DRIVE")
+    print("=" * 60)
 
-# Verificações iniciais
-print("📋 Verificando configurações...")
-print(f"📍 Pasta monitorada: {PASTA_MONITORADA}")
-print(f"   Existe: {os.path.exists(PASTA_MONITORADA)}")
+    # Verificações iniciais
+    print("📋 Verificando configurações...")
+    print(f"📍 Pasta monitorada: {PASTA_MONITORADA}")
+    print(f"   Existe: {os.path.exists(PASTA_MONITORADA)}")
+    
+    if not os.path.exists(PASTA_MONITORADA):
+        print("❌ ERRO: Pasta monitorada não existe!")
+        return
 
-if not os.path.exists(PASTA_MONITORADA):
-    print("❌ ERRO: Pasta monitorada não existe!")
-    exit(1)
+    print(f"📍 Pasta do Drive: {PASTA_GOOGLE_DRIVE}")
+    print(f"   Existe: {os.path.exists(PASTA_GOOGLE_DRIVE)}")
 
-print(f"📍 Pasta do Drive: {PASTA_GOOGLE_DRIVE}")
-print(f"   Existe: {os.path.exists(PASTA_GOOGLE_DRIVE)}")
+    # Cria pasta base do Drive
+    os.makedirs(PASTA_GOOGLE_DRIVE, exist_ok=True)
+    print("✅ Pasta base do Drive verificada/criada")
 
-# Cria a pasta base do Drive se não existir
-os.makedirs(PASTA_GOOGLE_DRIVE, exist_ok=True)
-print("✅ Pasta base do Drive verificada/criada")
+    # Sincroniza estrutura existente
+    sincronizar_estrutura_completa()
 
-# Sincroniza a estrutura completa existente
-sincronizar_estrutura_completa()
+    # Inicia monitoramento
+    print("\n🎯 Iniciando monitoramento em tempo real...")
+    event_handler = SyncDriveHandler()
+    observer = Observer()
+    observer.schedule(event_handler, PASTA_MONITORADA, recursive=True)
+    observer.start()
 
-# Inicializa e inicia o monitor
-print("\n🎯 Iniciando monitoramento em tempo real...")
-event_handler = MonitorPasta()
-observer = Observer()
-observer.schedule(event_handler, PASTA_MONITORADA, recursive=True)
-observer.start()
+    print(f"\n✅ MONITORAMENTO ATIVO")
+    print(f"📁 Monitorando: {PASTA_MONITORADA}")
+    print(f"💾 Copiando para: {PASTA_GOOGLE_DRIVE}")
+    print("📝 Estrutura completa de subpastas será mantida")
+    print("\n💡 Pressione Ctrl+C para parar\n")
 
-print(f"\n✅ MONITORAMENTO ATIVO")
-print(f"📁 Monitorando: {PASTA_MONITORADA}")
-print(f"💾 Copiando para: {PASTA_GOOGLE_DRIVE}")
-print("📝 Estrutura completa de subpastas será mantida")
-print("\n💡 Funcionalidades:")
-print("   - Criação de pastas é replicada automaticamente")
-print("   - Arquivos em subpastas mantêm a estrutura original")
-print("   - Modificações em arquivos são sincronizadas")
-print("   - Movimentação de pastas/arquivos é tratada")
-print("   - Pressione Ctrl+C para parar\n")
+    # Loop principal
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\n🛑 Parando monitoramento...")
+        observer.stop()
 
-# Loop principal
-try:
-    while True:
-        time.sleep(1)
-except KeyboardInterrupt:
-    print("\n🛑 Parando monitoramento...")
-    observer.stop()
+    observer.join()
+    print("✅ Monitoramento finalizado.")
 
-observer.join()
-print("✅ Monitoramento finalizado.")
+if __name__ == "__main__":
+    main()
