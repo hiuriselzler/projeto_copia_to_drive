@@ -1,6 +1,6 @@
 ﻿"""
 Sync Drive - Sincronizador de Pastas com Google Drive
-Autor: Seu Nome
+Autor: hiuri selzler
 Descrição: Monitora uma pasta local e sincroniza automaticamente com Google Drive
 """
 
